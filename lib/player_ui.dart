@@ -12,7 +12,6 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 class PlayerUI extends StatefulWidget {
   final bool roomer;
   final String room;
-  final bool landscape;
   final void Function() setLandscape;
   final void Function() setShowChat;
   final String selfName;
@@ -32,7 +31,6 @@ class PlayerUI extends StatefulWidget {
       required this.roomInfo,
       required this.msg,
       required this.selfName,
-      required this.landscape,
       required this.setLandscape,
       required this.setShowChat})
       : super(key: key);
@@ -146,7 +144,7 @@ class _PlayerUIState extends State<PlayerUI>
                     if (context.canPop()) context.pop();
                   },
                   icon: const Icon(
-                    Icons.arrow_back_ios,
+                    Remix.arrow_left_s_fill,
                     size: 24,
                     color: Colors.white,
                   ),
@@ -349,7 +347,7 @@ class _PlayerUIState extends State<PlayerUI>
                             const TextStyle(color: Colors.white, fontSize: 12),
                       ),
                     ),
-                  if (widget.landscape && widget.roomer)
+                  if (context.landscape() && widget.roomer)
                     CustomRadioButton(
                       elevation: 0,
                       height: 25,
@@ -385,13 +383,13 @@ class _PlayerUIState extends State<PlayerUI>
                       widget.setLandscape();
                     },
                     icon: Icon(
-                      widget.landscape
+                      context.landscape()
                           ? Icons.fullscreen_exit_rounded
                           : Icons.fullscreen_rounded,
                       size: 24,
                       color: Colors.white,
                     ),
-                    tooltip: widget.landscape ? "退出全屏" : "全屏",
+                    tooltip: context.landscape() ? "退出全屏" : "全屏",
                   ),
                 ],
               ),

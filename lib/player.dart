@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_styled_toast/flutter_styled_toast.dart';
 import 'package:random_string/random_string.dart';
+import 'package:together/ext.dart';
 import 'package:together/player_ui.dart';
 import 'package:together/room_info.dart';
 import 'package:video_player/video_player.dart';
@@ -39,7 +40,6 @@ class VideoApp extends StatefulWidget {
 class VideoAppState extends State<VideoApp> {
   late VideoPlayerController _controller;
   var roomer = true;
-  var landscape = false;
   var connectState = 0;
   var disposed = false;
   var showChat = false;
@@ -68,17 +68,15 @@ class VideoAppState extends State<VideoApp> {
 
   setLandscape() {
     setState(() {
-      if (landscape) {
+      if (context.landscape()) {
         SystemChrome.setPreferredOrientations([
           DeviceOrientation.portraitUp,
         ]);
-        landscape = false;
       } else {
         SystemChrome.setPreferredOrientations([
           DeviceOrientation.landscapeLeft,
           //全屏时旋转方向，左边
         ]);
-        landscape = true;
       }
     });
   }
@@ -236,18 +234,23 @@ class VideoAppState extends State<VideoApp> {
             // 更新成员信息
             updateMembers();
           }
-          setState(() {
-            msg.add(Message(type: 1, name: null, avatar: null, msg: list[1]));
-          });
+          if(list[1]!="NOT_ROOMER") {
+            setState(() {
+              msg.insert(
+                  0, Message(type: 1, name: null, avatar: null, msg: list[1]));
+            });
+          }
           break;
-        case 0:
+        case 0: //用户信息
           List<dynamic> t = list[1];
           setState(() {
-            msg.add(Message(
-                type: 0,
-                name: t[0].toString(),
-                avatar: t[1].toString(),
-                msg: t[2].toString()));
+            msg.insert(
+                0,
+                Message(
+                    type: 0,
+                    name: t[0].toString(),
+                    avatar: t[1].toString(),
+                    msg: t[2].toString()));
           });
           break;
       }
@@ -293,7 +296,7 @@ class VideoAppState extends State<VideoApp> {
       home: Scaffold(
         backgroundColor: Colors.black,
         body: Flex(
-            direction: landscape ? Axis.horizontal : Axis.vertical,
+            direction: context.landscape() ? Axis.horizontal : Axis.vertical,
             mainAxisSize: MainAxisSize.min,
             children: [
               Expanded(
@@ -307,7 +310,7 @@ class VideoAppState extends State<VideoApp> {
                           )
                         : Container(),
                   ),
-                  if (source == null)
+                  if (source == null || source == "")
                     const Center(
                       child: Text(
                         "未配置源，等待下发",
@@ -323,7 +326,6 @@ class VideoAppState extends State<VideoApp> {
                     roomInfo: room,
                     msg: msg,
                     selfName: widget.name,
-                    landscape: landscape,
                     setLandscape: setLandscape,
                     setShowChat: setShowChat,
                   )
@@ -332,7 +334,7 @@ class VideoAppState extends State<VideoApp> {
               if (showChat)
                 Expanded(
                   flex: showChat
-                      ? landscape
+                      ? context.landscape()
                           ? 2
                           : 6
                       : 0,
@@ -340,7 +342,7 @@ class VideoAppState extends State<VideoApp> {
                     roomInfo: room,
                     channel: channel,
                     msg: msg,
-                    selfName: widget.name,
+                    self: User(widget.name, widget.avatar),
                   ),
                 ),
             ]),

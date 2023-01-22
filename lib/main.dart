@@ -1,8 +1,10 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:random_string/random_string.dart';
 import 'package:together/dialog.dart';
+import 'package:together/ext.dart';
 import 'package:together/player.dart';
 
 final uid = randomAlpha(4);
@@ -82,42 +84,50 @@ class _MyHomePageState extends State<MyHomePage> {
         backgroundColor: Colors.transparent,
         elevation: 0,
       ),
-      body: Flex(
-        direction: Axis.vertical,
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: state == 0
-            ? [
-                MainButton(
-                  onClick: () {
-                    setState(() {
-                      state = 1;
-                    });
-                  },
-                  text: '创建房间',
-                  colors: const [Color(0xff8e8eff), Color(0xff32a9ff)],
-                ),
-                MainButton(
-                  onClick: () {
-                    setState(() {
-                      state = 2;
-                    });
-                  },
-                  text: '加入房间',
-                  colors: const [Color(0xffEC6F66), Color(0xffF3A183)],
-                ),
-              ]
-            : (state == 1
-                ? [
-                    const VideoConfigDialog(
-                      isCreate: true,
-                    )
-                  ]
-                : [
-                    const VideoConfigDialog(
-                      isCreate: false,
-                    )
-                  ]),
+      body: Center(
+        child: Flex(
+          direction: MediaQuery.of(context).size.width >
+                  MediaQuery.of(context).size.height
+              ? Axis.horizontal
+              : Axis.vertical,
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: state == 0
+              ? [
+                  const Spacer(),
+                  MainButton(
+                    onClick: () {
+                      setState(() {
+                        state = 1;
+                      });
+                    },
+                    text: '创建房间',
+                    colors: const [Color(0xff8e8eff), Color(0xff32a9ff)],
+                  ),
+                  const Spacer(),
+                  MainButton(
+                    onClick: () {
+                      setState(() {
+                        state = 2;
+                      });
+                    },
+                    text: '加入房间',
+                    colors: const [Color(0xffEC6F66), Color(0xffF3A183)],
+                  ),
+                  const Spacer(),
+                ]
+              : (state == 1
+                  ? [
+                      const VideoConfigDialog(
+                        isCreate: true,
+                      )
+                    ]
+                  : [
+                      const VideoConfigDialog(
+                        isCreate: false,
+                      )
+                    ]),
+        ),
       ),
       floatingActionButton: state != 0
           ? FloatingActionButton(
@@ -159,22 +169,25 @@ class MainButton extends StatefulWidget {
 class _MainButtonState extends State<MainButton> {
   @override
   Widget build(BuildContext context) {
-    return Center(
+    return Expanded(
+      flex: context.landscape() ? 1 : 3,
       child: ClipOval(
-        child: FractionallySizedBox(
-          widthFactor: 0.4,
-          child: InkWell(
-            onTap: widget.onClick,
-            child: AspectRatio(
-              aspectRatio: 1,
-              child: Container(
-                padding: const EdgeInsets.all(24),
-                decoration: BoxDecoration(
-                    gradient: LinearGradient(colors: widget.colors)),
-                child: Center(
-                  child: Text(
-                    widget.text,
-                    style: const TextStyle(color: Colors.white, fontSize: 18),
+        child: Material(
+          child: Ink(
+            decoration:
+                BoxDecoration(gradient: LinearGradient(colors: widget.colors)),
+            child: InkWell(
+              highlightColor: Colors.black38,
+              onTap: widget.onClick,
+              child: AspectRatio(
+                aspectRatio: 1,
+                child: Container(
+                  padding: const EdgeInsets.all(24),
+                  child: Center(
+                    child: Text(
+                      widget.text,
+                      style: const TextStyle(color: Colors.white, fontSize: 18),
+                    ),
                   ),
                 ),
               ),
