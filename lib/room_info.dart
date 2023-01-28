@@ -19,7 +19,7 @@ class UserWithId {
   UserWithId.fromJson(Map<String, dynamic> json)
       : name = json['name'] ?? "",
         avatar = json['avatar'] ?? "",
-        id = json['id'].toString();
+        id = json['id'];
 
   UserWithId(this.id, this.name, this.avatar);
 }

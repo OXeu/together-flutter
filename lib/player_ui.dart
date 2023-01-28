@@ -1,3 +1,6 @@
+import 'dart:math';
+
+import 'package:audio_video_progress_bar/audio_video_progress_bar.dart';
 import 'package:custom_radio_grouped_button/custom_radio_grouped_button.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -14,6 +17,7 @@ class PlayerUI extends StatefulWidget {
   final String room;
   final void Function() setLandscape;
   final void Function() setShowChat;
+  final void Function() refresh;
   final String selfName;
   final int connectState;
   final VideoPlayerController? controller;
@@ -32,7 +36,8 @@ class PlayerUI extends StatefulWidget {
       required this.msg,
       required this.selfName,
       required this.setLandscape,
-      required this.setShowChat})
+      required this.setShowChat,
+      required this.refresh})
       : super(key: key);
 
   @override
@@ -45,10 +50,11 @@ class _PlayerUIState extends State<PlayerUI>
   var lock = false;
   var progress = "00:00";
   var duration = "00:00";
-  var progressSecs = 0.0;
-  var slider = 0.0;
+  var progressDur = Duration.zero;
+  var slideDur = Duration.zero;
+  var cachedDur = Duration.zero;
   var startSlide = false;
-  var durationSecs = 0.0;
+  var durationDur = Duration.zero;
   late Animation<double> animation;
   late AnimationController controller;
 
@@ -67,24 +73,38 @@ class _PlayerUIState extends State<PlayerUI>
       DeviceOrientation.portraitUp,
     ]);
     syncProgress();
+    syncCached();
+  }
+
+  syncCached() async {
+    while (true) {
+      await Future.delayed(const Duration(seconds: 2), () {
+        cachedDur = (widget.controller?.value.buffered ??
+                [DurationRange(Duration.zero, Duration.zero)])
+            .fold(
+                Duration.zero,
+                (previousValue, element) =>
+                    previousValue + element.end - element.start);
+      });
+    }
   }
 
   void syncProgress() async {
     while (true) {
-      await Future.delayed(const Duration(seconds: 1), () {
+      await Future.delayed(const Duration(milliseconds: 400), () {
         final ctrl = widget.controller;
         if (ctrl != null) {
           if (duration == "00:00") {
             duration = ctrl.value.duration.string();
-            durationSecs = ctrl.value.duration.inSeconds.toDouble();
+            durationDur = ctrl.value.duration;
           }
           ctrl.position.then((value) {
             if (mounted) {
               setState(() {
-                if (!startSlide && durationSecs != 0.0) {
+                if (!startSlide && durationDur != Duration.zero) {
                   progress = value?.string() ?? "00:00";
-                  progressSecs = value?.inSeconds.toDouble() ?? 0.0;
-                  slider = progressSecs / durationSecs;
+                  progressDur = value ?? Duration.zero;
+                  slideDur = progressDur;
                 }
               });
             }
@@ -234,51 +254,55 @@ class _PlayerUIState extends State<PlayerUI>
               child: Flex(
                 direction: Axis.horizontal,
                 children: [
-                  Text(
-                    progress,
-                    style: const TextStyle(color: Colors.white, fontSize: 12),
-                  ),
                   Expanded(
-                    child: widget.roomer
-                        ? Slider(
-                            value: slider,
-                            onChangeStart: (v) {
-                              startSlide = true;
-                            },
-                            onChangeEnd: (double value) {
-                              startSlide = false;
-                              if ((progressSecs - durationSecs * value).abs() >
-                                  5) {
-                                widget.controller?.seekTo(Duration(
-                                    seconds: (durationSecs * value).toInt()));
-                              }
-                            },
-                            onChanged: (double value) {
-                              setState(() {
-                                slider = value;
-                                progress = Duration(
-                                        seconds:
-                                            (slider * durationSecs).toInt())
-                                    .string();
-                              });
-                            },
-                          )
-                        : Padding(
-                            padding:
-                                const EdgeInsets.symmetric(horizontal: 16.0),
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(20),
-                              child: LinearProgressIndicator(
-                                value: slider,
-                                backgroundColor: Colors.white,
-                              ),
-                            ),
-                          ),
+                    child: ProgressBar(
+                      progress: slideDur,
+                      buffered: cachedDur,
+                      total: durationDur,
+                      onSeek: (duration) {
+                        if (widget.roomer) {
+                          startSlide = false;
+                          if ((duration - progressDur).abs() >
+                              const Duration(seconds: 5)) {
+                            widget.controller?.seekTo(duration);
+                          }
+                        }
+                      },
+                      baseBarColor: Colors.white12,
+                      bufferedBarColor: Colors.white38,
+                      progressBarColor: Colors.white,
+                      thumbColor:
+                          widget.roomer ? Colors.white : Colors.transparent,
+                      thumbGlowColor:
+                          widget.roomer ? Colors.white38 : Colors.transparent,
+                      barHeight: 15,
+                      onDragStart: (duration) {
+                        if (widget.roomer) {
+                          startSlide = true;
+                          setState(() {
+                            slideDur = duration.timeStamp;
+                          });
+                        }
+                      },
+                      onDragUpdate: (duration) {
+                        if (widget.roomer) {
+                          setState(() {
+                            slideDur = duration.timeStamp;
+                          });
+                        }
+                      },
+                      onDragEnd: () {
+                        startSlide = false;
+                      },
+                      timeLabelLocation: TimeLabelLocation.sides,
+                      timeLabelTextStyle:
+                          const TextStyle(color: Colors.white, fontSize: 12),
+                    ),
                   ),
-                  Text(
-                    duration,
-                    style: const TextStyle(color: Colors.white, fontSize: 12),
-                  ),
+                  // Text(
+                  //   duration,
+                  //   style: const TextStyle(color: Colors.white, fontSize: 12),
+                  // ),
                 ],
               ),
             ),
@@ -288,31 +312,43 @@ class _PlayerUIState extends State<PlayerUI>
               child: Flex(
                 direction: Axis.horizontal,
                 children: [
-                  if (widget.roomer)
-                    IconButton(
-                      onPressed: () {
-                        var controller = widget.controller;
-                        if (controller != null && mounted) {
-                          setState(() {
-                            controller.value.isPlaying
-                                ? controller.pause()
-                                : controller.play();
+                  IconButton(
+                    onPressed: () {
+                      var controller = widget.controller;
+                      if (controller != null && mounted) {
+                        setState(() {
+                          controller.value.isPlaying
+                              ? controller.pause()
+                              : controller.play();
+                          if (widget.roomer) {
                             widget.channel.sink.add(
                                 "/progress ${controller.value.isPlaying ? "play" : "pause"}\n${controller.value.playbackSpeed}");
-                          });
-                        }
-                      },
-                      icon: Icon(
-                        widget.controller?.value.isPlaying ?? false
-                            ? Icons.pause_rounded
-                            : Icons.play_arrow_rounded,
-                        size: 24,
-                        color: Colors.white,
-                      ),
-                      tooltip: widget.controller?.value.isPlaying ?? false
-                          ? "暂停"
-                          : "播放",
+                          }
+                        });
+                      }
+                    },
+                    icon: Icon(
+                      widget.controller?.value.isPlaying ?? false
+                          ? Icons.pause_rounded
+                          : Icons.play_arrow_rounded,
+                      size: 24,
+                      color: Colors.white,
                     ),
+                    tooltip: widget.controller?.value.isPlaying ?? false
+                        ? "暂停"
+                        : "播放",
+                  ),
+                  IconButton(
+                    onPressed: () {
+                      widget.refresh();
+                    },
+                    icon: const Icon(
+                      Remix.refresh_line,
+                      size: 24,
+                      color: Colors.white,
+                    ),
+                    tooltip: "同步进度",
+                  ),
                   if (widget.roomer)
                     IconButton(
                       onPressed: () {
@@ -351,16 +387,19 @@ class _PlayerUIState extends State<PlayerUI>
                     CustomRadioButton(
                       elevation: 0,
                       height: 25,
-                      width: 50,
+                      width: 60,
                       absoluteZeroSpacing: true,
                       unSelectedColor: Colors.transparent,
                       buttonLables: const [
+                        '0.5',
+                        '0.75',
                         '1.0',
+                        '1.25',
                         '1.5',
                         '2.0',
                         '3.0',
                       ],
-                      buttonValues: const [1.0, 1.5, 2.0, 3.0],
+                      buttonValues: const [0.5, 0.75, 1.0, 1.25, 1.5, 2.0, 3.0],
                       buttonTextStyle: const ButtonTextStyle(
                           selectedColor: Colors.white,
                           unSelectedColor: Colors.white70,
@@ -375,8 +414,11 @@ class _PlayerUIState extends State<PlayerUI>
                       selectedColor: Colors.transparent,
                       unSelectedBorderColor: Colors.transparent,
                       selectedBorderColor: Colors.transparent,
-                      defaultSelected:
-                          widget.controller?.value.playbackSpeed ?? 1.0,
+                      defaultSelected: min(
+                          3.0,
+                          widget.controller?.value.playbackSpeed
+                                  .roundToDouble() ??
+                              1.0),
                     ),
                   IconButton(
                     onPressed: () {

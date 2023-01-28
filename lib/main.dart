@@ -6,15 +6,21 @@ import 'package:random_string/random_string.dart';
 import 'package:together/dialog.dart';
 import 'package:together/ext.dart';
 import 'package:together/player.dart';
+import 'package:together/empty_loading.dart'
+    if (dart.library.html) 'package:together/web_loading.dart';
 
 final uid = randomAlpha(4);
+final qq = randomNumeric(9);
 
 void main() {
-  runApp(const MyApp());
+  if (kIsWeb) {
+    removeWebLoading();
+  }
+  runApp(const App());
 }
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+class App extends StatelessWidget {
+  const App({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -22,7 +28,7 @@ class MyApp extends StatelessWidget {
       routes: [
         GoRoute(
           path: '/',
-          builder: (context, state) => const MyHomePage(title: "一起看"),
+          builder: (context, state) => const AppHomePage(title: "一起看"),
         ),
         GoRoute(
           path: '/watch',
@@ -31,7 +37,8 @@ class MyApp extends StatelessWidget {
             return VideoApp(
                 source: state.queryParams['source'],
                 room: state.queryParams['room'] ?? "room",
-                avatar: state.queryParams['avatar'] ?? "",
+                avatar: state.queryParams['avatar'] ??
+                    "http://q1.qlogo.cn/g?b=qq&nk=$qq&s=640",
                 name: state.queryParams['name'] ?? "游客$uid");
           },
         ),
@@ -41,16 +48,16 @@ class MyApp extends StatelessWidget {
   }
 }
 
-class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key, required this.title});
+class AppHomePage extends StatefulWidget {
+  const AppHomePage({super.key, required this.title});
 
   final String title;
 
   @override
-  State<MyHomePage> createState() => _MyHomePageState();
+  State<AppHomePage> createState() => _AppHomePageState();
 }
 
-class _MyHomePageState extends State<MyHomePage> {
+class _AppHomePageState extends State<AppHomePage> {
   final TextEditingController _controller = TextEditingController();
 
   // Listening on the `events` stream will open a connection.
@@ -76,7 +83,7 @@ class _MyHomePageState extends State<MyHomePage> {
             style: const TextStyle(color: Colors.black),
           ),
           const Text(
-            "Together",
+            "We Together",
             style: TextStyle(color: Colors.black54, fontSize: 10),
           )
         ]),
@@ -170,7 +177,7 @@ class _MainButtonState extends State<MainButton> {
   @override
   Widget build(BuildContext context) {
     return Expanded(
-      flex: context.landscape() ? 1 : 3,
+      flex: context.landscape() ? 1 : 2,
       child: ClipOval(
         child: Material(
           child: Ink(

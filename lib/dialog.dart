@@ -1,6 +1,3 @@
-import 'dart:convert';
-
-import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_styled_toast/flutter_styled_toast.dart';
 import 'package:go_router/go_router.dart';
@@ -21,9 +18,11 @@ class _VideoConfigDialogState extends State<VideoConfigDialog> {
   TextEditingController sourceCtrl = TextEditingController();
   TextEditingController roomCtrl = TextEditingController();
   TextEditingController nameCtrl = TextEditingController();
+  TextEditingController qqCtrl = TextEditingController();
   FocusNode node1 = FocusNode();
   FocusNode node2 = FocusNode();
   FocusNode node3 = FocusNode();
+  FocusNode node4 = FocusNode();
 
   @override
   Widget build(BuildContext context) {
@@ -32,7 +31,7 @@ class _VideoConfigDialogState extends State<VideoConfigDialog> {
         child: Container(
           constraints: const BoxConstraints(maxWidth: 600),
           child: FractionallySizedBox(
-            widthFactor: 0.6,
+            widthFactor: 0.8,
             alignment: Alignment.center,
             child: ClipRRect(
               borderRadius: const BorderRadius.all(Radius.circular(16)),
@@ -47,8 +46,8 @@ class _VideoConfigDialogState extends State<VideoConfigDialog> {
                       children: [
                         Text(
                           widget.isCreate ? "创建房间" : "加入房间",
-                          style:
-                              const TextStyle(color: Colors.black, fontSize: 16),
+                          style: const TextStyle(
+                              color: Colors.black, fontSize: 16),
                         )
                       ],
                     ),
@@ -80,6 +79,17 @@ class _VideoConfigDialogState extends State<VideoConfigDialog> {
                       child: EditText(
                         controller: nameCtrl,
                         node: node3,
+                        hint: "昵称",
+                        background: const Color(0xFFF6F6F6),
+                        textColor: Colors.black,
+                        margin: const EdgeInsets.only(top: 16),
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.all(.0),
+                      child: EditText(
+                        controller: qqCtrl,
+                        node: node4,
                         hint: "QQ号",
                         background: const Color(0xFFF6F6F6),
                         textColor: Colors.black,
@@ -89,39 +99,26 @@ class _VideoConfigDialogState extends State<VideoConfigDialog> {
                     TextButton(
                         onPressed: () async {
                           var name = nameCtrl.text;
-                          var avatar = "";
-                          final request = Dio().get(
-                              "https://v.api.aa1.cn/api/qqnicheng/index.php?qq=${nameCtrl.text}&type=json");
-                          request.asStream().listen((event) {
-                            final resp = event.data.replaceAll("'", '"');
-                            print(resp);
-                            if (resp.contains("请输入")) {
-                              showToast("请输入QQ号", context: context);
-                            } else {
-                              Map<String, dynamic> map = jsonDecode(resp);
-                              if (map['qqnicheng'] != null) {
-                                name = map['qqnicheng']!;
-                                avatar =
-                                    "http://q1.qlogo.cn/g?b=qq&nk=${nameCtrl.text}&s=640";
-                                final params = {
-                                  'room': roomCtrl.text,
-                                  'name': name,
-                                  'avatar': avatar,
-                                  'source': sourceCtrl.text
-                                };
-                                if (!widget.isCreate) {
-                                  params.remove('source');
-                                }
-                                context.pushNamed('watch', queryParams: params);
-                              } else {
-                                showToast("获取昵称错误", context: context);
-                                return;
-                              }
+                          if (roomCtrl.text.isEmpty) {
+                            showToast("请输入房间名", context: context);
+                          } else if (qqCtrl.text.isEmpty) {
+                            showToast("请输入QQ号", context: context);
+                          } else if (nameCtrl.text.isEmpty) {
+                            showToast("请输入昵称", context: context);
+                          } else {
+                            final avatar =
+                                "http://q1.qlogo.cn/g?b=qq&nk=${qqCtrl.text}&s=640";
+                            final params = {
+                              'room': roomCtrl.text,
+                              'name': name,
+                              'avatar': avatar,
+                              'source': sourceCtrl.text
+                            };
+                            if (!widget.isCreate) {
+                              params.remove('source');
                             }
-                          }, onError: (obj) {
-                            showToast("获取昵称错误:$obj", context: context);
-                            return;
-                          }, cancelOnError: true);
+                            context.pushNamed('watch', queryParams: params);
+                          }
                         },
                         child: Text(widget.isCreate ? "创建房间" : "加入房间"))
                   ],

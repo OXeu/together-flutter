@@ -10,7 +10,8 @@ class ChatUI extends StatefulWidget {
   // final void Function() callback;
   final RoomInfo? roomInfo;
   final List<Message> msg;
-  final User self;
+  final Map<String, UserWithId> user;
+  final String self;
   final WebSocketChannel channel;
 
   const ChatUI(
@@ -18,7 +19,8 @@ class ChatUI extends StatefulWidget {
       required this.roomInfo,
       required this.channel,
       required this.msg,
-      required this.self})
+      required this.self,
+      required this.user})
       : super(key: key);
 
   @override
@@ -38,13 +40,16 @@ class _ChatUIState extends State<ChatUI> {
     setState(() {
       if (controller.text.isNotEmpty) {
         widget.msg.insert(
-            0,
-            Message(
-                type: 0,
-                name: widget.self.name,
-                avatar: widget.self.avatar,
-                msg: controller.text));
-        if (controller.text.startsWith("/")) {
+            0, Message(type: 0, uid: widget.self, msg: controller.text));
+        if (controller.text.startsWith("/login")) {
+          List<String> str = controller.text.split(" ");
+          if (str.length == 3) {
+            widget.channel.sink.add(
+                "${str[0]} ${str[1]}\nhttp://q1.qlogo.cn/g?b=qq&nk=${str[2]}&s=640");
+          } else {
+            widget.msg.insert(0, Message(type: 1, uid: null, msg: "格式不正确"));
+          }
+        } else if (controller.text.startsWith("/")) {
           widget.channel.sink.add(controller.text);
         } else {
           widget.channel.sink.add("/msg ${controller.text}");
@@ -141,18 +146,19 @@ class _ChatUIState extends State<ChatUI> {
                           direction: Axis.horizontal,
                           mainAxisAlignment: msg.type == 1
                               ? MainAxisAlignment.center
-                              : msg.name == widget.self.name
+                              : msg.uid == widget.self
                                   ? MainAxisAlignment.end
                                   : MainAxisAlignment.start,
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            msg.name != widget.self.name && msg.type == 0
+                            msg.uid != widget.self && msg.type == 0
                                 ? Padding(
                                     padding: const EdgeInsets.symmetric(
                                         horizontal: 8.0),
                                     child: ClipOval(
                                       child: CachedNetworkImage(
-                                        imageUrl: msg.avatar ??
+                                        imageUrl: widget
+                                                .user[msg.uid]?.avatar ??
                                             "https://q.qlogo.cn/g?b=qq&nk=${10001}&s=640",
                                         height: 32,
                                         width: 32,
@@ -166,7 +172,7 @@ class _ChatUIState extends State<ChatUI> {
                               flex: 5,
                               child: Column(
                                 crossAxisAlignment: msg.type == 0
-                                    ? msg.name == widget.self.name
+                                    ? msg.uid == widget.self
                                         ? CrossAxisAlignment.end
                                         : CrossAxisAlignment.start
                                     : CrossAxisAlignment.center,
@@ -176,7 +182,8 @@ class _ChatUIState extends State<ChatUI> {
                                       padding: const EdgeInsets.symmetric(
                                           horizontal: 0.0, vertical: 4),
                                       child: Text(
-                                        msg.name ?? "游客",
+                                        widget
+                                            .user[msg.uid]?.name ?? "游客",
                                         style: const TextStyle(
                                             color: Colors.white, fontSize: 10),
                                       ),
@@ -187,7 +194,7 @@ class _ChatUIState extends State<ChatUI> {
                                               BorderRadius.circular(10),
                                           color: msg.type == 1
                                               ? Colors.white12
-                                              : msg.name == widget.self.name
+                                              : msg.uid == widget.self
                                                   ? Colors.blue
                                                   : Colors.white),
                                       padding: msg.type == 1
@@ -198,7 +205,7 @@ class _ChatUIState extends State<ChatUI> {
                                         msg.msg,
                                         style: TextStyle(
                                             color: msg.type == 0 &&
-                                                    msg.name != widget.self.name
+                                                    msg.uid != widget.self
                                                 ? Colors.black
                                                 : Colors.white,
                                             fontSize: msg.type == 1 ? 10 : 14),
@@ -207,13 +214,14 @@ class _ChatUIState extends State<ChatUI> {
                                 ],
                               ),
                             ),
-                            msg.name == widget.self.name && msg.type == 0
+                            msg.uid == widget.self && msg.type == 0
                                 ? Padding(
                                     padding: const EdgeInsets.symmetric(
                                         horizontal: 8.0),
                                     child: ClipOval(
                                       child: CachedNetworkImage(
-                                        imageUrl: msg.avatar ??
+                                        imageUrl: widget
+                                            .user[msg.uid]?.avatar ??
                                             "https://q.qlogo.cn/g?b=qq&nk=${10001}&s=640",
                                         height: 32,
                                         width: 32,
@@ -295,22 +303,10 @@ class _ChatUIState extends State<ChatUI> {
   }
 }
 
-class User {
-  String name;
-  String avatar;
-
-  User(this.name, this.avatar);
-}
-
 class Message {
   int type;
+  String? uid;
   String msg;
-  String? name;
-  String? avatar;
 
-  Message(
-      {required this.type,
-      required this.name,
-      required this.avatar,
-      required this.msg});
+  Message({required this.type, required this.uid, required this.msg});
 }

@@ -1,10 +1,10 @@
+import 'dart:collection';
 import 'dart:convert';
 
 import 'package:duration/duration.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_styled_toast/flutter_styled_toast.dart';
-import 'package:random_string/random_string.dart';
 import 'package:together/ext.dart';
 import 'package:together/player_ui.dart';
 import 'package:together/room_info.dart';
@@ -17,7 +17,7 @@ import 'chat_ui.dart';
 const baseUrl = "wss://together.kafi.work";
 // const baseUrl = "ws://10.0.0.100:8080";
 const roomId = "room";
-final uid = randomAlpha(4);
+// final uid = randomAlpha(4);
 
 /// Stateful widget to fetch and then display video content.
 class VideoApp extends StatefulWidget {
@@ -43,9 +43,12 @@ class VideoAppState extends State<VideoApp> {
   var connectState = 0;
   var disposed = false;
   var showChat = false;
+  String uid = "";
   RoomInfo? room;
+  Map<String, UserWithId> users = HashMap();
   List<Message> msg = List.empty(growable: true);
   String? source;
+  String? tips;
 
   // 0连接中 1在线 2重试 3离线
   WebSocketChannel channel = WebSocketChannel.connect(
@@ -61,24 +64,35 @@ class VideoAppState extends State<VideoApp> {
     reconnect(init: true);
     syncMembers();
     if (mounted) {
-      loadSource(widget.source ?? "");
+      loadSource("0${widget.source ?? ""}");
     }
     requestSource();
   }
 
   setLandscape() {
-    setState(() {
-      if (context.landscape()) {
-        SystemChrome.setPreferredOrientations([
-          DeviceOrientation.portraitUp,
-        ]);
-      } else {
-        SystemChrome.setPreferredOrientations([
-          DeviceOrientation.landscapeLeft,
-          //全屏时旋转方向，左边
-        ]);
-      }
-    });
+    WidgetsFlutterBinding.ensureInitialized(); //不加这个强制横/竖屏会报错
+    if (context.landscape()) {
+      SystemChrome.setPreferredOrientations([
+        DeviceOrientation.landscapeLeft,
+        DeviceOrientation.landscapeRight,
+        //全屏时旋转方向，左边
+      ]);
+      SystemChrome.setPreferredOrientations([
+        DeviceOrientation.portraitUp,
+      ]);
+
+      setState(() {});
+    } else {
+      SystemChrome.setPreferredOrientations([
+        DeviceOrientation.portraitUp,
+      ]);
+      SystemChrome.setPreferredOrientations([
+        DeviceOrientation.landscapeLeft,
+        DeviceOrientation.landscapeRight,
+        //全屏时旋转方向，左边
+      ]);
+      setState(() {});
+    }
   }
 
   setShowChat() {
@@ -98,9 +112,18 @@ class VideoAppState extends State<VideoApp> {
 
   void requestSource() async {
     while (true) {
-      await Future.delayed(const Duration(seconds: 1), () {
+      await Future.delayed(const Duration(milliseconds: 200), () {
         if (mounted && !disposed && (source == null || source == "")) {
           channel.sink.add("/share request");
+        }
+        if (source == null || source == "") {
+          tips = "未配置源，等待下发";
+        } else if (_controller.value.isBuffering) {
+          tips = "缓冲中...";
+        } else if (!_controller.value.isInitialized) {
+          tips = "加载中...";
+        } else {
+          tips = "";
         }
       });
     }
@@ -114,13 +137,23 @@ class VideoAppState extends State<VideoApp> {
     }
   }
 
-  void loadSource(String source) {
+  void loadSource(String source, {Duration? position}) {
+    var isPlay = source.substring(0, 1);
+    var src = source.substring(1);
     setState(() {
-      this.source = source;
-      _controller = VideoPlayerController.network(source)
+      this.source = src;
+      _controller = VideoPlayerController.network(src)
         ..initialize().then((_) {
           // Ensure the first frame is shown after the video is initialized, even before the play button has been pressed.
           setState(() {});
+          if (isPlay == "0") {
+            _controller.pause();
+          } else {
+            if (position != null) {
+              _controller.seekTo(position);
+            }
+            _controller.play();
+          }
           syncProgress();
         });
     });
@@ -178,18 +211,33 @@ class VideoAppState extends State<VideoApp> {
         case 6: //成员信息
           setState(() {
             room = RoomInfo.fromJson(list[1]);
+            final newUsers = room?.members.map((e) {
+              if (e.name == widget.name) {
+                uid = e.id;
+              }
+              return MapEntry(e.id, e);
+            });
+            if (newUsers != null) {
+              users.addEntries(newUsers);
+            }
+            print(users);
           });
           break;
         case 5: //速度控制
           final speed = double.parse(list[1]);
           if (speed > 0) {
-            _controller.setPlaybackSpeed(speed);
+            if (mounted && !disposed) {
+              setState(() {
+                _controller.setPlaybackSpeed(speed);
+              });
+            }
           }
           break;
         case 4: // 分享内容
           if (list[1] == "request" && roomer) {
-            print("Roomer got the share request,share");
-            channel.sink.add("/share $source");
+            // /share request
+            channel.sink.add(
+                "/share ${_controller.value.isPlaying ? "1" : "0"}${source ?? ""}");
           } else {
             loadSource(list[1]);
           }
@@ -205,28 +253,54 @@ class VideoAppState extends State<VideoApp> {
           }
           break;
         case 2: //进度控制
+          var flag = true;
           switch (list[1][0]) {
             case "play":
-              _controller.play();
+              setState(() {
+                _controller.play();
+              });
               break;
             case "pause":
-              _controller.pause();
+              setState(() {
+                _controller.pause();
+              });
               break;
             default:
-              if (!_controller.value.isPlaying) {
-                _controller.play();
-              }
               Duration t = parseTime(list[1][0]);
               Duration? local = await _controller.position;
-              if (local != null &&
-                  (local - t).abs() > const Duration(seconds: 3)) {
-                _controller.seekTo(t + const Duration(seconds: 1));
+              if (local != null) {
+                final distance = (local - t);
+                final speed = double.parse(list[1][1]);
+                if (distance.abs() < const Duration(seconds: 2)) {
+                  setState(() {
+                    _controller.setPlaybackSpeed(
+                        distance > Duration.zero ? 0.8 * speed : 1.3 * speed);
+                    flag = false;
+                  });
+                } else if (distance.abs() < const Duration(seconds: 20)) {
+                  setState(() {
+                    _controller.setPlaybackSpeed(
+                        distance > Duration.zero ? 0.5 * speed : 3 * speed);
+                    flag = false;
+                  });
+                } else {
+                  setState(() {
+                    _controller.seekTo(t);
+                  });
+                }
+                if (distance.abs() < const Duration(milliseconds: 500)) {
+                  flag = true;
+                }
               }
               break;
           }
-          final speed = double.parse(list[1][1]);
-          if (speed > 0) {
-            _controller.setPlaybackSpeed(speed);
+          if (_controller.value.isPlaying && flag) {
+            final speed = double.parse(list[1][1]);
+            if (speed > 0) {
+              setState(() {
+                _controller.setPlaybackSpeed(speed);
+              });
+            }
           }
           break;
         case 1:
@@ -234,23 +308,17 @@ class VideoAppState extends State<VideoApp> {
             // 更新成员信息
             updateMembers();
           }
-          if(list[1]!="NOT_ROOMER") {
+          if (list[1] != "NOT_ROOMER") {
             setState(() {
-              msg.insert(
-                  0, Message(type: 1, name: null, avatar: null, msg: list[1]));
+              msg.insert(0, Message(type: 1, uid: null, msg: list[1]));
             });
           }
           break;
         case 0: //用户信息
           List<dynamic> t = list[1];
           setState(() {
-            msg.insert(
-                0,
-                Message(
-                    type: 0,
-                    name: t[0].toString(),
-                    avatar: t[1].toString(),
-                    msg: t[2].toString()));
+            msg.insert(0,
+                Message(type: 0, uid: t[0].toString(), msg: t[1].toString()));
           });
           break;
       }
@@ -276,7 +344,7 @@ class VideoAppState extends State<VideoApp> {
   }
 
   void _sendMessage(Duration? duration) async {
-    if (duration != null) {
+    if (duration != null && roomer) {
       try {
         // var response = await Dio().post('$baseUrl/message', data: formData);
         var post = "/progress $duration\n${_controller.value.playbackSpeed}";
@@ -292,7 +360,7 @@ class VideoAppState extends State<VideoApp> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Video Demo',
+      title: 'WeTogether',
       home: Scaffold(
         backgroundColor: Colors.black,
         body: Flex(
@@ -310,11 +378,12 @@ class VideoAppState extends State<VideoApp> {
                           )
                         : Container(),
                   ),
-                  if (source == null || source == "")
-                    const Center(
+                  if (tips != null)
+                    Center(
                       child: Text(
-                        "未配置源，等待下发",
-                        style: TextStyle(color: Colors.white, fontSize: 12),
+                        tips ?? "",
+                        style: const TextStyle(
+                            color: Colors.white, fontSize: 12),
                       ),
                     ),
                   PlayerUI(
@@ -328,6 +397,14 @@ class VideoAppState extends State<VideoApp> {
                     selfName: widget.name,
                     setLandscape: setLandscape,
                     setShowChat: setShowChat,
+                    refresh: () {
+                      if (mounted && !disposed) {
+                        _controller.dispose();
+                        loadSource(
+                            "${_controller.value.isPlaying ? "1" : "0"}${source ?? ""}",
+                            position: _controller.value.position);
+                      }
+                    },
                   )
                 ]),
               ),
@@ -342,7 +419,8 @@ class VideoAppState extends State<VideoApp> {
                     roomInfo: room,
                     channel: channel,
                     msg: msg,
-                    self: User(widget.name, widget.avatar),
+                    self: uid,
+                    user: users,
                   ),
                 ),
             ]),
