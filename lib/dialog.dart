@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_styled_toast/flutter_styled_toast.dart';
 import 'package:go_router/go_router.dart';
 import 'package:together/edit_text.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class VideoConfigDialog extends StatefulWidget {
   const VideoConfigDialog({Key? key, required this.isCreate}) : super(key: key);
@@ -23,6 +24,33 @@ class _VideoConfigDialogState extends State<VideoConfigDialog> {
   FocusNode node2 = FocusNode();
   FocusNode node3 = FocusNode();
   FocusNode node4 = FocusNode();
+
+  SharedPreferences? prefs;
+  final SHARED_KEY_U_QQ = "u_qq";
+  final SHARED_KEY_U_NAME = "u_name";
+  final SHARED_KEY_U_ROOM = "u_room";
+  final SHARED_KEY_U_REM = "u_is_remember";
+
+  bool isRemember = false;
+
+  @override
+  void initState() async {
+    prefs = await SharedPreferences.getInstance();
+
+    // 读取缓存值
+    String? mQQ = prefs?.getString(SHARED_KEY_U_QQ);
+    String? mName = prefs?.getString(SHARED_KEY_U_NAME);
+    String? mRoom = prefs?.getString(SHARED_KEY_U_ROOM);
+    bool? mRem = prefs?.getBool(SHARED_KEY_U_REM);
+    setState(() {
+      if (mQQ != null) qqCtrl.text = mQQ;
+      if (mName != null) nameCtrl.text = mName;
+      if (mRoom != null) roomCtrl.text = mRoom;
+      if (mRem != null) isRemember = mRem;
+    });
+
+    super.initState();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -96,6 +124,23 @@ class _VideoConfigDialogState extends State<VideoConfigDialog> {
                         margin: const EdgeInsets.symmetric(vertical: 16),
                       ),
                     ),
+                    Padding(
+                        padding: const EdgeInsets.all(.0),
+                        child: Row(
+                          children: <Widget>[
+                            Checkbox(
+                                value: isRemember,
+                                onChanged: (value) {
+                                  setState(() {
+                                    isRemember = value!;
+                                  });
+                                  prefs?.setBool(SHARED_KEY_U_REM, value!);
+                                }),
+                            const Text(
+                              "是否记住设置项",
+                            ),
+                          ],
+                        )),
                     TextButton(
                         onPressed: () async {
                           var name = nameCtrl.text;
@@ -114,6 +159,15 @@ class _VideoConfigDialogState extends State<VideoConfigDialog> {
                               'avatar': avatar,
                               'source': sourceCtrl.text
                             };
+
+                            // 缓存用户配置值
+                            if (isRemember) {
+                              prefs?.setString(SHARED_KEY_U_QQ, qqCtrl.text);
+                              prefs?.setString(SHARED_KEY_U_NAME, name);
+                              prefs?.setString(
+                                  SHARED_KEY_U_ROOM, roomCtrl.text);
+                            }
+
                             if (!widget.isCreate) {
                               params.remove('source');
                             }
